@@ -26,7 +26,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .graph-layout {{ display: grid; gap: 20px; }}
         .graph-card {{ background: white; border-radius: 10px; box-shadow: 0 0 18px rgba(0, 0, 0, 0.08); padding: 18px; }}
         .graph-card h2 {{ margin: 0 0 12px; font-size: 1.2rem; }}
-        #graph, #dailyGraph, #weeklyGraph {{ width: 100%; min-height: 420px; }}
+        #graph, #dailyGraph, #weeklyGraph, #typicalDayGraph, #typicalWeekGraph {{ width: 100%; min-height: 420px; }}
         .description {{ margin: 0 0 12px; color: #444; font-size: 0.95rem; }}
     </style>
 </head>
@@ -56,6 +56,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <section class="graph-card">
                 <h2>Weekly averages / deviation</h2>
                 <div id="weeklyGraph"></div>
+            </section>
+            <section class="graph-card">
+                <h2>Typical virtual day</h2>
+                <div id="typicalDayGraph"></div>
+            </section>
+            <section class="graph-card">
+                <h2>Typical virtual week</h2>
+                <div id="typicalWeekGraph"></div>
             </section>
         </div>
         <footer style="margin-top: 18px; color: #666; font-size: 0.95rem; text-align: center;">
@@ -296,6 +304,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             return `${{year}}-W${{String(weekNumber).padStart(2, '0')}}`;
         }}
 
+        const summaryMetricConfig = [
+            {{ field: 'bikes', label: 'Bikes', color: '#1f77b4' }},
+            {{ field: 'electricalBikes', label: 'Electrical bikes', color: '#d62728' }},
+            {{ field: 'mechanicalBikes', label: 'Mechanical bikes', color: '#9467bd' }},
+        ];
+
         function aggregateMetricByPeriod(level, startMs, endMs, periodKeyFn) {{
             const groups = {{}};
             for (let index = 0; index < level.timestampsMs.length; index++) {{
@@ -305,34 +319,146 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 }}
                 const key = periodKeyFn(timestampMs);
                 if (!groups[key]) {{
-                    groups[key] = [];
+                    groups[key] = {{
+                        bikes: [],
+                        electricalBikes: [],
+                        mechanicalBikes: [],
+                    }};
                 }}
-                groups[key].push(level.bikes[index]);
+                summaryMetricConfig.forEach(({{ field }}) => {{
+                    groups[key][field].push(level[field][index]);
+                }});
             }}
             return Object.keys(groups).sort().map((key) => {{
-                const stats = computeStats(groups[key]);
-                return {{ key, avg: stats.mean, deviation: stats.std }};
+                const metrics = {{ key }};
+                summaryMetricConfig.forEach(({{ field }}) => {{
+                    const stats = computeStats(groups[key][field]);
+                    metrics[field] = {{ mean: stats.mean, std: stats.std }};
+                }});
+                return metrics;
             }});
         }}
 
         function renderPeriodGraph(elementId, title, periodData) {{
-            const trace = {{
-                x: periodData.map((item) => item.key),
-                y: periodData.map((item) => item.avg),
-                customdata: periodData.map((item) => item.deviation),
-                type: 'bar',
-                name: 'Average bikes',
-                marker: {{ color: '#1f77b4' }},
-                error_y: {{ type: 'data', array: periodData.map((item) => item.deviation), visible: true }},
-                hovertemplate: '%{{x}}<br>avg bikes: %{{y}}<br>std dev: %{{customdata}}<extra></extra>',
-            }};
+            const traces = summaryMetricConfig.map(({{ field, label, color }}) => {{
+                return {{
+                    x: periodData.map((item) => item.key),
+                    y: periodData.map((item) => item[field].mean),
+                    customdata: periodData.map((item) => item[field].std),
+                    type: 'bar',
+                    name: `${{label}} avg`,
+                    marker: {{ color }},
+                    error_y: {{ type: 'data', array: periodData.map((item) => item[field].std), visible: true }},
+                    hovertemplate: '%{{x}}<br>' + label + ': %{{y}}<br>std dev: %{{customdata}}<extra></extra>',
+                }};
+            }});
             const layout = {{
                 title: {{ text: title, x: 0.01, xanchor: 'left' }},
                 margin: {{ t: 70, b: 80, l: 70, r: 40 }},
+                barmode: 'group',
                 xaxis: {{ title: elementId === 'dailyGraph' ? 'Day' : 'Week', tickangle: -45 }},
                 yaxis: {{ title: 'Average bikes', rangemode: 'nonnegative' }},
             }};
-            Plotly.react(elementId, [trace], layout, {{ responsive: true }});
+            Plotly.react(elementId, traces, layout, {{ responsive: true }});
+        }}
+
+        function computeMinMaxAvg(values) {{
+            if (!values || !values.length) {{
+                return {{ avg: 0, min: 0, max: 0 }};
+            }}
+            let min = values[0];
+            let max = values[0];
+            let sum = 0;
+            for (const value of values) {{
+                sum += value;
+                if (value < min) min = value;
+                if (value > max) max = value;
+            }}
+            return {{ avg: sum / values.length, min, max }};
+        }}
+
+        function getTimeOfDayKey(timestampMs) {{
+            const date = new Date(timestampMs);
+            const hh = String(date.getHours()).padStart(2, '0');
+            const mm = String(date.getMinutes()).padStart(2, '0');
+            return `${{hh}}:${{mm}}`;
+        }}
+
+        function getWeekPatternKey(timestampMs) {{
+            const date = new Date(timestampMs);
+            const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const day = weekdays[(date.getDay() + 6) % 7];
+            const hhmm = getTimeOfDayKey(timestampMs);
+            return `${{day}} ${{hhmm}}`;
+        }}
+
+        function aggregateTypicalPattern(level, startMs, endMs, periodKeyFn) {{
+            const groups = {{}};
+            for (let index = 0; index < level.timestampsMs.length; index++) {{
+                const timestampMs = level.timestampsMs[index];
+                if (timestampMs < startMs || timestampMs > endMs) {{
+                    continue;
+                }}
+                const date = new Date(timestampMs);
+                const key = periodKeyFn(timestampMs);
+                if (!groups[key]) {{
+                    groups[key] = {{
+                        key,
+                        dayIndex: (date.getDay() + 6) % 7,
+                        timeIndex: date.getHours() * 100 + date.getMinutes(),
+                        bikes: [],
+                        electricalBikes: [],
+                        mechanicalBikes: [],
+                    }};
+                }}
+                summaryMetricConfig.forEach(({{ field }}) => {{
+                    groups[key][field].push(level[field][index]);
+                }});
+            }}
+            return Object.values(groups)
+                .sort((a, b) => a.dayIndex - b.dayIndex || a.timeIndex - b.timeIndex)
+                .map((group) => {{
+                    const entry = {{ key: group.key }};
+                    summaryMetricConfig.forEach(({{ field }}) => {{
+                        entry[field] = computeMinMaxAvg(group[field]);
+                    }});
+                    return entry;
+                }});
+        }}
+
+        function renderTypicalGraph(elementId, title, patternData, xLabel) {{
+            const traces = [];
+            summaryMetricConfig.forEach(({{ field, label, color }}) => {{
+                traces.push({{
+                    x: patternData.map((item) => item.key),
+                    y: patternData.map((item) => item[field].avg),
+                    name: `${{label}} avg`,
+                    mode: 'lines',
+                    line: {{ color, width: 2 }},
+                }});
+                traces.push({{
+                    x: patternData.map((item) => item.key),
+                    y: patternData.map((item) => item[field].min),
+                    name: `${{label}} min`,
+                    mode: 'lines',
+                    line: {{ color, width: 1, dash: 'dash' }},
+                }});
+                traces.push({{
+                    x: patternData.map((item) => item.key),
+                    y: patternData.map((item) => item[field].max),
+                    name: `${{label}} max`,
+                    mode: 'lines',
+                    line: {{ color, width: 1, dash: 'dot' }},
+                }});
+            }});
+            const layout = {{
+                title: {{ text: title, x: 0.01, xanchor: 'left' }},
+                margin: {{ t: 70, b: 120, l: 70, r: 40 }},
+                xaxis: {{ title: xLabel, tickangle: -45, tickmode: 'auto', nticks: 15 }},
+                yaxis: {{ title: 'Bikes', rangemode: 'nonnegative' }},
+                legend: {{ orientation: 'h', yanchor: 'bottom', y: 1.05, xanchor: 'left', x: 0 }},
+            }};
+            Plotly.react(elementId, traces, layout, {{ responsive: true }});
         }}
 
         function updateSummaryCharts(level, startMs, endMs) {{
@@ -340,6 +466,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const weeklyData = aggregateMetricByPeriod(level, startMs, endMs, getWeekKey);
             renderPeriodGraph('dailyGraph', 'Daily averages + deviation', dailyData);
             renderPeriodGraph('weeklyGraph', 'Weekly averages + deviation', weeklyData);
+            const typicalDayData = aggregateTypicalPattern(level, startMs, endMs, getTimeOfDayKey);
+            const typicalWeekData = aggregateTypicalPattern(level, startMs, endMs, getWeekPatternKey);
+            renderTypicalGraph('typicalDayGraph', 'Typical virtual day (avg / min / max)', typicalDayData, 'Time of day');
+            renderTypicalGraph('typicalWeekGraph', 'Typical virtual week (avg / min / max)', typicalWeekData, 'Weekday / time');
         }}
 
         function updateChart(startMs, endMs, updateUrl = false) {{
