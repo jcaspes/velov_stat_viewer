@@ -56,6 +56,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const resetButton = document.getElementById('resetButton');
         const graphDiv = document.getElementById('graph');
         let ignoreRelayout = false;
+        const traceVisibility = {{
+            capacity: false,
+            bikes: true,
+            stands: false,
+            electricalBikes: false,
+            mechanicalBikes: false,
+            status: false,
+        }};
+
+        function preserveVisibility() {{
+            if (!graphDiv.data) {{
+                return;
+            }}
+            graphDiv.data.forEach((trace) => {{
+                const name = trace.name;
+                if (Object.prototype.hasOwnProperty.call(traceVisibility, name)) {{
+                    traceVisibility[name] = trace.visible !== 'legendonly';
+                }}
+            }});
+        }}
 
         function formatInputValue(date) {{
             const offset = date.getTimezoneOffset();
@@ -71,6 +91,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     name: 'capacity',
                     mode: 'lines',
                     type: 'scattergl',
+                    visible: traceVisibility.capacity ? true : 'legendonly',
                     line: {{ width: 2, color: '#1f77b4' }},
                     hovertemplate: '%{{x}}<br>capacity: %{{y}}<extra></extra>',
                 }},
@@ -80,6 +101,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     name: 'bikes',
                     mode: 'lines',
                     type: 'scattergl',
+                    visible: traceVisibility.bikes ? true : 'legendonly',
                     line: {{ width: 2, dash: 'dashdot', color: '#ff7f0e' }},
                     hovertemplate: '%{{x}}<br>bikes: %{{y}}<extra></extra>',
                 }},
@@ -89,6 +111,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     name: 'stands',
                     mode: 'lines',
                     type: 'scattergl',
+                    visible: traceVisibility.stands ? true : 'legendonly',
                     line: {{ width: 2, dash: 'dot', color: '#2ca02c' }},
                     hovertemplate: '%{{x}}<br>stands: %{{y}}<extra></extra>',
                 }},
@@ -98,6 +121,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     name: 'electricalBikes',
                     mode: 'lines',
                     type: 'scattergl',
+                    visible: traceVisibility.electricalBikes ? true : 'legendonly',
                     line: {{ width: 2, dash: 'dash', color: '#d62728' }},
                     hovertemplate: '%{{x}}<br>electricalBikes: %{{y}}<extra></extra>',
                 }},
@@ -107,6 +131,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     name: 'mechanicalBikes',
                     mode: 'lines',
                     type: 'scattergl',
+                    visible: traceVisibility.mechanicalBikes ? true : 'legendonly',
                     line: {{ width: 2, dash: 'longdash', color: '#9467bd' }},
                     hovertemplate: '%{{x}}<br>mechanicalBikes: %{{y}}<extra></extra>',
                 }},
@@ -115,6 +140,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     y: level.status_values,
                     name: 'status',
                     type: 'bar',
+                    visible: traceVisibility.status ? true : 'legendonly',
                     marker: {{ color: level.status_colors, line: {{ width: 0 }} }},
                     yaxis: 'y2',
                     customdata: level.status_labels,
@@ -200,6 +226,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }}
 
         function updateChart(startMs, endMs) {{
+            preserveVisibility();
             const rangeSpan = endMs - startMs;
             const levelIndex = chooseLevel(rangeSpan);
             const level = sliceLevel(levels[levelIndex], startMs, endMs);
