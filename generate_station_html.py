@@ -15,19 +15,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <title>Station {station_number} - Vélo'v status</title>
     <script src="https://cdn.plot.ly/plotly-2.31.1.min.js"></script>
     <style>
-        body {{ margin: 0; font-family: Arial, sans-serif; background: #f5f5f5; color: #222; }}
+        body {{ margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--text); }}
+        body.light {{ --bg: #f5f5f5; --surface: #ffffff; --text: #222222; --muted: #444444; --border: #bbbbbb; }}
+        body.dark {{ --bg: #121212; --surface: #1e1e1e; --text: #ececec; --muted: #aaaaaa; --border: #333333; }}
         .container {{ max-width: 1200px; margin: 24px auto; padding: 0 18px; }}
         h1 {{ margin: 0 0 14px; font-size: 1.9rem; }}
         .controls {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }}
         .controls label {{ display: flex; flex-direction: column; font-size: 0.95rem; }}
-        .controls input {{ padding: 8px 10px; border: 1px solid #bbb; border-radius: 6px; min-width: 220px; }}
+        .controls input {{ padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; min-width: 220px; background: var(--surface); color: var(--text); }}
         .controls button {{ padding: 10px 16px; border: none; background: #0078d4; color: white; border-radius: 6px; cursor: pointer; }}
         .controls button:hover {{ background: #005ea8; }}
         .graph-layout {{ display: grid; gap: 20px; }}
-        .graph-card {{ background: white; border-radius: 10px; box-shadow: 0 0 18px rgba(0, 0, 0, 0.08); padding: 18px; }}
-        .graph-card h2 {{ margin: 0 0 12px; font-size: 1.2rem; }}
+        .graph-card {{ background: var(--surface); border-radius: 10px; box-shadow: 0 0 18px rgba(0, 0, 0, 0.08); padding: 18px; }}
+        .graph-card h2 {{ margin: 0 0 12px; font-size: 1.2rem; color: var(--text); }}
         #graph, #dailyGraph, #weeklyGraph, #typicalDayGraph, #typicalWeekGraph {{ width: 100%; min-height: 520px; height: 520px; }}
-        .description {{ margin: 0 0 12px; color: #444; font-size: 0.95rem; }}
+        .description {{ margin: 0 0 12px; color: var(--muted); font-size: 0.95rem; }}
     </style>
 </head>
 <body>
@@ -43,6 +45,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </label>
             <button id="zoomButton">Zoom</button>
             <button id="resetButton">Reset view</button>
+            <button id="themeToggleButton" type="button">Toggle theme</button>
         </div>
         <div class="graph-layout">
             <section class="graph-card">
@@ -81,6 +84,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const endInput = document.getElementById('endDate');
         const zoomButton = document.getElementById('zoomButton');
         const resetButton = document.getElementById('resetButton');
+        const themeToggleButton = document.getElementById('themeToggleButton');
         const graphDiv = document.getElementById('graph');
         let ignoreRelayout = false;
         let currentDragMode = 'zoom';
@@ -124,6 +128,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     traceVisibility[name] = trace.visible !== 'legendonly';
                 }}
             }});
+        }}
+
+        function applyTheme(theme) {{
+            document.body.classList.toggle('dark', theme === 'dark');
+            document.body.classList.toggle('light', theme === 'light');
+            themeToggleButton.textContent = theme === 'dark' ? 'Switch to light' : 'Switch to dark';
+            localStorage.setItem('velovstat-theme', theme);
+        }}
+
+        function loadTheme() {{
+            const savedTheme = localStorage.getItem('velovstat-theme');
+            const theme = savedTheme === 'dark' ? 'dark' : 'light';
+            applyTheme(theme);
+        }}
+
+        function getThemeColors() {{
+            const style = getComputedStyle(document.body);
+            return {{
+                surface: style.getPropertyValue('--surface').trim(),
+                text: style.getPropertyValue('--text').trim(),
+            }};
+        }}
+
+        function refreshCharts() {{
+            const start = new Date(startInput.value);
+            const end = new Date(endInput.value);
+            if (start.valueOf() && end.valueOf() && start < end) {{
+                updateChart(start.getTime(), end.getTime());
+            }}
         }}
 
         function formatInputValue(date) {{
@@ -203,6 +236,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 title: {{ text: 'Station ' + stationNumber, x: 0.01, xanchor: 'left' }},
                 legend: {{ orientation: 'v', x: 1.02, xanchor: 'left', y: 1, yanchor: 'top' }},
                 margin: {{ t: 90, b: 80, l: 70, r: 140 }},
+                paper_bgcolor: getThemeColors().surface,
+                plot_bgcolor: getThemeColors().surface,
+                font: {{ color: getThemeColors().text }},
                 xaxis: {{
                     title: 'Date',
                     type: 'date',
@@ -216,9 +252,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             {{ step: 'all', label: 'All' }},
                         ],
                     }},
+                    color: getThemeColors().text,
                 }},
                 dragmode: currentDragMode,
-                yaxis: {{ title: 'Count', rangemode: 'nonnegative' }},
+                yaxis: {{ title: 'Count', rangemode: 'nonnegative', color: getThemeColors().text }},
                 yaxis2: {{
                     title: 'Status',
                     overlaying: 'y',
@@ -226,6 +263,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     range: [-0.15, 1.15],
                     tickvals: [0, 1],
                     ticktext: ['CLOSED', 'OPEN'],
+                    color: getThemeColors().text,
                 }},
                 hovermode: 'x unified',
             }};
@@ -356,8 +394,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 margin: {{ t: 70, b: 80, l: 70, r: 160 }},
                 barmode: 'group',
                 legend: {{ orientation: 'v', x: 1.02, xanchor: 'left', y: 1, yanchor: 'top' }},
-                xaxis: {{ title: elementId === 'dailyGraph' ? 'Day' : 'Week', tickangle: -45 }},
-                yaxis: {{ title: 'Average bikes', rangemode: 'nonnegative' }},
+                xaxis: {{ title: elementId === 'dailyGraph' ? 'Day' : 'Week', tickangle: -45, color: getThemeColors().text }},
+                yaxis: {{ title: 'Average bikes', rangemode: 'nonnegative', color: getThemeColors().text }},
+                paper_bgcolor: getThemeColors().surface,
+                plot_bgcolor: getThemeColors().surface,
+                font: {{ color: getThemeColors().text }},
             }};
             Plotly.react(elementId, traces, layout, {{ responsive: true }});
         }}
@@ -455,8 +496,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 title: {{ text: title, x: 0.01, xanchor: 'left' }},
                 margin: {{ t: 70, b: 120, l: 70, r: 160 }},
                 legend: {{ orientation: 'v', x: 1.02, xanchor: 'left', y: 1, yanchor: 'top' }},
-                xaxis: {{ title: xLabel, tickangle: -45, tickmode: 'auto', nticks: 15 }},
-                yaxis: {{ title: 'Bikes', rangemode: 'nonnegative' }},
+                xaxis: {{ title: xLabel, tickangle: -45, tickmode: 'auto', nticks: 15, color: getThemeColors().text }},
+                yaxis: {{ title: 'Bikes', rangemode: 'nonnegative', color: getThemeColors().text }},
+                paper_bgcolor: getThemeColors().surface,
+                plot_bgcolor: getThemeColors().surface,
+                font: {{ color: getThemeColors().text }},
             }};
             Plotly.react(elementId, traces, layout, {{ responsive: true }});
         }}
@@ -537,6 +581,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }});
 
         resetButton.addEventListener('click', resetView);
+        themeToggleButton.addEventListener('click', () => {{
+            const newTheme = document.body.classList.contains('dark') ? 'light' : 'dark';
+            applyTheme(newTheme);
+            refreshCharts();
+        }});
 
         const savedState = getHashState();
         const startState = savedState.start ? new Date(savedState.start) : minDate;
@@ -544,6 +593,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         if (savedState.tool) {{
             currentDragMode = savedState.tool;
         }}
+        loadTheme();
         if (startState.valueOf() && endState.valueOf() && startState < endState) {{
             startInput.value = formatInputValue(startState);
             endInput.value = formatInputValue(endState);
