@@ -41,4 +41,4 @@ Run scripts in sequence:
 1. Collect data
 3. Generate visualizations
 
-
+[Sample](sample.png)
