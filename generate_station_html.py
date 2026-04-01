@@ -66,6 +66,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             status: false,
         }};
 
+        function getHashState() {{
+            const hash = window.location.hash.substring(1);
+            if (!hash) {{
+                return {{}};
+            }}
+            const params = new URLSearchParams(hash);
+            return {{
+                start: params.get('start'),
+                end: params.get('end'),
+                tool: params.get('tool'),
+            }};
+        }}
+
+        function updateHash(startIso, endIso) {{
+            const params = new URLSearchParams();
+            if (startIso) params.set('start', startIso);
+            if (endIso) params.set('end', endIso);
+            if (currentDragMode) params.set('tool', currentDragMode);
+            window.history.replaceState(null, '', '#' + params.toString());
+        }}
+
         function preserveVisibility() {{
             if (!graphDiv.data) {{
                 return;
@@ -227,7 +248,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             return slice.timestamps.length ? slice : level;
         }}
 
-        function updateChart(startMs, endMs) {{
+        function updateChart(startMs, endMs, updateUrl = false) {{
             preserveVisibility();
             if (graphDiv.layout && graphDiv.layout.dragmode) {{
                 currentDragMode = graphDiv.layout.dragmode;
@@ -240,6 +261,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             ignoreRelayout = true;
             Plotly.react('graph', traces, layout, {{ responsive: true, scrollZoom: true }}).then((gd) => {{
                 bindPlotlyEvents(gd);
+                if (updateUrl) {{
+                    updateHash(new Date(startMs).toISOString(), new Date(endMs).toISOString());
+                }}
                 ignoreRelayout = false;
             }});
         }}
@@ -269,7 +293,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }}
             startInput.value = formatInputValue(start);
             endInput.value = formatInputValue(end);
-            updateChart(start.getTime(), end.getTime());
+            updateChart(start.getTime(), end.getTime(), true);
         }}
 
         function bindPlotlyEvents(gd) {{
@@ -286,14 +310,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 alert('Please select a valid date range.');
                 return;
             }}
-            updateChart(start.getTime(), end.getTime());
+            updateChart(start.getTime(), end.getTime(), true);
         }});
 
         resetButton.addEventListener('click', resetView);
 
-        startInput.value = formatInputValue(minDate);
-        endInput.value = formatInputValue(maxDate);
-        updateChart(minDate.getTime(), maxDate.getTime());
+        const savedState = getHashState();
+        const startState = savedState.start ? new Date(savedState.start) : minDate;
+        const endState = savedState.end ? new Date(savedState.end) : maxDate;
+        if (savedState.tool) {{
+            currentDragMode = savedState.tool;
+        }}
+        if (startState.valueOf() && endState.valueOf() && startState < endState) {{
+            startInput.value = formatInputValue(startState);
+            endInput.value = formatInputValue(endState);
+            updateChart(startState.getTime(), endState.getTime());
+        }} else {{
+            startInput.value = formatInputValue(minDate);
+            endInput.value = formatInputValue(maxDate);
+            updateChart(minDate.getTime(), maxDate.getTime());
+        }}
     </script>
 </body>
 </html>
