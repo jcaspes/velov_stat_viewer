@@ -189,8 +189,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     y: level.status_values,
                     name: 'status',
                     type: 'bar',
-                    visible: traceVisibility.status ? true : 'legendonly',
-                    marker: {{ color: level.status_colors, line: {{ width: 0 }} }},
+                    visible: traceVisibility.status ? true : 'legendonly',                    showlegend: false,                    marker: {{ color: level.status_colors, line: {{ width: 0 }} }},
                     yaxis: 'y2',
                     customdata: level.status_labels,
                     hovertemplate: '%{{x}}<br>status: %{{customdata}}<extra></extra>',
@@ -202,8 +201,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function makeLayout(rangeStart, rangeEnd) {{
             return {{
                 title: {{ text: 'Station ' + stationNumber, x: 0.01, xanchor: 'left' }},
-                legend: {{ orientation: 'h', yanchor: 'bottom', y: 1.08, xanchor: 'left', x: 0 }},
-                margin: {{ t: 90, b: 80, l: 70, r: 70 }},
+                legend: {{ orientation: 'v', x: 1.02, xanchor: 'left', y: 1, yanchor: 'top' }},
+                margin: {{ t: 90, b: 80, l: 70, r: 140 }},
                 xaxis: {{
                     title: 'Date',
                     type: 'date',
@@ -354,8 +353,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }});
             const layout = {{
                 title: {{ text: title, x: 0.01, xanchor: 'left' }},
-                margin: {{ t: 70, b: 80, l: 70, r: 40 }},
+                margin: {{ t: 70, b: 80, l: 70, r: 160 }},
                 barmode: 'group',
+                legend: {{ orientation: 'v', x: 1.02, xanchor: 'left', y: 1, yanchor: 'top' }},
                 xaxis: {{ title: elementId === 'dailyGraph' ? 'Day' : 'Week', tickangle: -45 }},
                 yaxis: {{ title: 'Average bikes', rangemode: 'nonnegative' }},
             }};
@@ -453,10 +453,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }});
             const layout = {{
                 title: {{ text: title, x: 0.01, xanchor: 'left' }},
-                margin: {{ t: 70, b: 120, l: 70, r: 40 }},
+                margin: {{ t: 70, b: 120, l: 70, r: 160 }},
+                legend: {{ orientation: 'v', x: 1.02, xanchor: 'left', y: 1, yanchor: 'top' }},
                 xaxis: {{ title: xLabel, tickangle: -45, tickmode: 'auto', nticks: 15 }},
                 yaxis: {{ title: 'Bikes', rangemode: 'nonnegative' }},
-                legend: {{ orientation: 'h', yanchor: 'bottom', y: 1.05, xanchor: 'left', x: 0 }},
             }};
             Plotly.react(elementId, traces, layout, {{ responsive: true }});
         }}
