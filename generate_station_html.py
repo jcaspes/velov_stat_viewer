@@ -171,7 +171,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     }},
                 }},
                 dragmode: currentDragMode,
-                yaxis: {{ title: 'Count' }},
+                yaxis: {{ title: 'Count', rangemode: 'nonnegative' }},
                 yaxis2: {{
                     title: 'Status',
                     overlaying: 'y',
@@ -359,6 +359,7 @@ def read_csv_file(csv_path):
                 'status_label': 'OPEN' if status == 'OPEN' else status or 'UNKNOWN',
                 'status_color': '#2ca02c' if status == 'OPEN' else '#d62728',
             })
+    rows.sort(key=lambda row: (row['timestamp_ms'] is None, row['timestamp_ms'] or 0, row['timestamp']))
     return rows
 
 
