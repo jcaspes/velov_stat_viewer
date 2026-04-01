@@ -26,7 +26,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .graph-layout {{ display: grid; gap: 20px; }}
         .graph-card {{ background: white; border-radius: 10px; box-shadow: 0 0 18px rgba(0, 0, 0, 0.08); padding: 18px; }}
         .graph-card h2 {{ margin: 0 0 12px; font-size: 1.2rem; }}
-        #graph, #dailyGraph, #weeklyGraph, #typicalDayGraph, #typicalWeekGraph {{ width: 100%; min-height: 420px; }}
+        #graph, #dailyGraph, #weeklyGraph, #typicalDayGraph, #typicalWeekGraph {{ width: 100%; min-height: 520px; height: 520px; }}
         .description {{ margin: 0 0 12px; color: #444; font-size: 0.95rem; }}
     </style>
 </head>
