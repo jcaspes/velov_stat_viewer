@@ -4,6 +4,7 @@
 ## Project Overview
 
 VelovStats is a Python-based project for analyzing and visualizing Vélo'v bike-sharing system statistics.
+The python script will generate a static html page visible in a browser
 
 ## Project Structure
 
@@ -42,4 +43,4 @@ Run scripts in sequence:
 1. Collect data
 3. Generate visualizations
 
-[Sample](sample.png)
+![Screenshot of a generated page](sample.png)
