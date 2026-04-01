@@ -21,7 +21,6 @@ velov_stat_viewer/
 ## Installation
 
 ```bash
-cd /d:/DEV/VelovStats/velov_stat_viewer
 pip install requests
 ```
 
