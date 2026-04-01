@@ -2,6 +2,7 @@ import argparse
 import ast
 import csv
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 
@@ -45,108 +46,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <script>
         const data = {data_json};
-        const statusColors = {status_colors};
         const stationNumber = "{station_number}";
-
-        const traces = [
-            {{
-                x: data.timestamps,
-                y: data.capacity,
-                name: 'capacity',
-                mode: 'lines+markers',
-                line: {{ width: 2, color: '#1f77b4' }},
-                marker: {{ size: 6 }},
-                hovertemplate: '%{{x}}<br>capacity: %{{y}}<extra></extra>',
-            }},
-            {{
-                x: data.timestamps,
-                y: data.bikes,
-                name: 'bikes',
-                mode: 'lines+markers',
-                line: {{ width: 2, dash: 'dashdot', color: '#ff7f0e' }},
-                marker: {{ size: 6 }},
-                hovertemplate: '%{{x}}<br>bikes: %{{y}}<extra></extra>',
-            }},
-            {{
-                x: data.timestamps,
-                y: data.stands,
-                name: 'stands',
-                mode: 'lines+markers',
-                line: {{ width: 2, dash: 'dot', color: '#2ca02c' }},
-                marker: {{ size: 6 }},
-                hovertemplate: '%{{x}}<br>stands: %{{y}}<extra></extra>',
-            }},
-            {{
-                x: data.timestamps,
-                y: data.electricalBikes,
-                name: 'electricalBikes',
-                mode: 'lines+markers',
-                line: {{ width: 2, dash: 'dash', color: '#d62728' }},
-                marker: {{ size: 6 }},
-                hovertemplate: '%{{x}}<br>electricalBikes: %{{y}}<extra></extra>',
-            }},
-            {{
-                x: data.timestamps,
-                y: data.mechanicalBikes,
-                name: 'mechanicalBikes',
-                mode: 'lines+markers',
-                line: {{ width: 2, dash: 'longdash', color: '#9467bd' }},
-                marker: {{ size: 6 }},
-                hovertemplate: '%{{x}}<br>mechanicalBikes: %{{y}}<extra></extra>',
-            }},
-            {{
-                x: data.timestamps,
-                y: data.status_values,
-                name: 'status',
-                type: 'bar',
-                marker: {{ color: data.status_colors, line: {{ width: 0 }} }},
-                yaxis: 'y2',
-                hovertemplate: '%{{x}}<br>status: %{{customdata}}<extra></extra>',
-                customdata: data.status_labels,
-                opacity: 0.6,
-            }},
-        ];
-
-        const layout = {{
-            title: {{ text: 'Station ' + stationNumber, x: 0.01, xanchor: 'left' }},
-            legend: {{ orientation: 'h', yanchor: 'bottom', y: 1.08, xanchor: 'left', x: 0 }},
-            margin: {{ t: 80, b: 80, l: 70, r: 70 }},
-            xaxis: {{
-                title: 'Date',
-                type: 'date',
-                rangeslider: {{ visible: true }},
-                rangeselector: {{
-                    buttons: [
-                        {{ step: 'day', count: 1, label: '1d' }},
-                        {{ step: 'day', count: 7, label: '7d' }},
-                        {{ step: 'month', count: 1, label: '1m' }},
-                        {{ step: 'all', label: 'All' }},
-                    ],
-                }},
-            }},
-            yaxis: {{ title: 'Count' }},
-            yaxis2: {{
-                title: 'Status',
-                overlaying: 'y',
-                side: 'right',
-                range: [-0.2, 1.2],
-                tickvals: [0, 1],
-                ticktext: ['CLOSED', 'OPEN'],
-            }},
-            hovermode: 'x unified',
-        }};
-
-        const config = {{ responsive: true, scrollZoom: true }};
-
-        Plotly.newPlot('graph', traces, layout, config);
-
+        const levels = data.levels;
+        const minDate = new Date(levels[levels.length - 1].timestamps[0]);
+        const maxDate = new Date(levels[levels.length - 1].timestamps[levels[levels.length - 1].timestamps.length - 1]);
         const startInput = document.getElementById('startDate');
         const endInput = document.getElementById('endDate');
         const zoomButton = document.getElementById('zoomButton');
         const resetButton = document.getElementById('resetButton');
-
-        const minDate = new Date(data.timestamps[0]);
-        const maxDate = new Date(data.timestamps[data.timestamps.length - 1]);
+        const graphDiv = document.getElementById('graph');
+        let ignoreRelayout = false;
 
         function formatInputValue(date) {{
             const offset = date.getTimezoneOffset();
@@ -154,14 +63,186 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             return local.toISOString().slice(0, 16);
         }}
 
-        function applyRange(start, end) {{
-            Plotly.relayout('graph', {{
-                'xaxis.range': [start, end],
+        function makeTraces(level) {{
+            return [
+                {{
+                    x: level.timestamps,
+                    y: level.capacity,
+                    name: 'capacity',
+                    mode: 'lines',
+                    type: 'scattergl',
+                    line: {{ width: 2, color: '#1f77b4' }},
+                    hovertemplate: '%{{x}}<br>capacity: %{{y}}<extra></extra>',
+                }},
+                {{
+                    x: level.timestamps,
+                    y: level.bikes,
+                    name: 'bikes',
+                    mode: 'lines',
+                    type: 'scattergl',
+                    line: {{ width: 2, dash: 'dashdot', color: '#ff7f0e' }},
+                    hovertemplate: '%{{x}}<br>bikes: %{{y}}<extra></extra>',
+                }},
+                {{
+                    x: level.timestamps,
+                    y: level.stands,
+                    name: 'stands',
+                    mode: 'lines',
+                    type: 'scattergl',
+                    line: {{ width: 2, dash: 'dot', color: '#2ca02c' }},
+                    hovertemplate: '%{{x}}<br>stands: %{{y}}<extra></extra>',
+                }},
+                {{
+                    x: level.timestamps,
+                    y: level.electricalBikes,
+                    name: 'electricalBikes',
+                    mode: 'lines',
+                    type: 'scattergl',
+                    line: {{ width: 2, dash: 'dash', color: '#d62728' }},
+                    hovertemplate: '%{{x}}<br>electricalBikes: %{{y}}<extra></extra>',
+                }},
+                {{
+                    x: level.timestamps,
+                    y: level.mechanicalBikes,
+                    name: 'mechanicalBikes',
+                    mode: 'lines',
+                    type: 'scattergl',
+                    line: {{ width: 2, dash: 'longdash', color: '#9467bd' }},
+                    hovertemplate: '%{{x}}<br>mechanicalBikes: %{{y}}<extra></extra>',
+                }},
+                {{
+                    x: level.timestamps,
+                    y: level.status_values,
+                    name: 'status',
+                    type: 'bar',
+                    marker: {{ color: level.status_colors, line: {{ width: 0 }} }},
+                    yaxis: 'y2',
+                    customdata: level.status_labels,
+                    hovertemplate: '%{{x}}<br>status: %{{customdata}}<extra></extra>',
+                    opacity: 0.6,
+                }},
+            ];
+        }}
+
+        function makeLayout(rangeStart, rangeEnd) {{
+            return {{
+                title: {{ text: 'Station ' + stationNumber, x: 0.01, xanchor: 'left' }},
+                legend: {{ orientation: 'h', yanchor: 'bottom', y: 1.08, xanchor: 'left', x: 0 }},
+                margin: {{ t: 90, b: 80, l: 70, r: 70 }},
+                xaxis: {{
+                    title: 'Date',
+                    type: 'date',
+                    range: [rangeStart, rangeEnd],
+                    rangeslider: {{ visible: true }},
+                    rangeselector: {{
+                        buttons: [
+                            {{ step: 'day', count: 1, label: '1d' }},
+                            {{ step: 'day', count: 7, label: '7d' }},
+                            {{ step: 'month', count: 1, label: '1m' }},
+                            {{ step: 'all', label: 'All' }},
+                        ],
+                    }},
+                }},
+                yaxis: {{ title: 'Count' }},
+                yaxis2: {{
+                    title: 'Status',
+                    overlaying: 'y',
+                    side: 'right',
+                    range: [-0.15, 1.15],
+                    tickvals: [0, 1],
+                    ticktext: ['CLOSED', 'OPEN'],
+                }},
+                hovermode: 'x unified',
+            }};
+        }}
+
+        function bisectLeft(array, value) {{
+            let low = 0;
+            let high = array.length;
+            while (low < high) {{
+                const mid = Math.floor((low + high) / 2);
+                if (array[mid] < value) {{
+                    low = mid + 1;
+                }} else {{
+                    high = mid;
+                }}
+            }}
+            return low;
+        }}
+
+        function chooseLevel(rangeSpan) {{
+            const totalSpan = maxDate.getTime() - minDate.getTime();
+            const ratio = rangeSpan / totalSpan;
+            const thresholds = [0.4, 0.18, 0.08, 0.035, 0.015];
+            for (let index = levels.length - 1; index >= 0; index--) {{
+                if (ratio <= thresholds[index]) {{
+                    return index;
+                }}
+            }}
+            return 0;
+        }}
+
+        function sliceLevel(level, startMs, endMs) {{
+            const from = bisectLeft(level.timestampsMs, startMs);
+            const to = bisectLeft(level.timestampsMs, endMs + 1);
+            const slice = {{
+                timestamps: level.timestamps.slice(from, to),
+                capacity: level.capacity.slice(from, to),
+                bikes: level.bikes.slice(from, to),
+                stands: level.stands.slice(from, to),
+                electricalBikes: level.electricalBikes.slice(from, to),
+                mechanicalBikes: level.mechanicalBikes.slice(from, to),
+                status_values: level.status_values.slice(from, to),
+                status_labels: level.status_labels.slice(from, to),
+                status_colors: level.status_colors.slice(from, to),
+            }};
+            return slice.timestamps.length ? slice : level;
+        }}
+
+        function updateChart(startMs, endMs) {{
+            const rangeSpan = endMs - startMs;
+            const levelIndex = chooseLevel(rangeSpan);
+            const level = sliceLevel(levels[levelIndex], startMs, endMs);
+            const traces = makeTraces(level);
+            const layout = makeLayout(new Date(startMs).toISOString(), new Date(endMs).toISOString());
+            ignoreRelayout = true;
+            Plotly.react('graph', traces, layout, {{ responsive: true, scrollZoom: true }}).then((gd) => {{
+                bindPlotlyEvents(gd);
+                ignoreRelayout = false;
             }});
         }}
 
-        startInput.value = formatInputValue(minDate);
-        endInput.value = formatInputValue(maxDate);
+        function resetView() {{
+            startInput.value = formatInputValue(minDate);
+            endInput.value = formatInputValue(maxDate);
+            updateChart(minDate.getTime(), maxDate.getTime());
+        }}
+
+        function relayoutHandler(eventData) {{
+            if (ignoreRelayout) {{
+                return;
+            }}
+            const x0 = eventData['xaxis.range[0]'] || eventData['xaxis.range'];
+            const x1 = eventData['xaxis.range[1]'];
+            if (!x0 || !x1) {{
+                return;
+            }}
+            const start = new Date(x0);
+            const end = new Date(x1);
+            if (!start.valueOf() || !end.valueOf() || start >= end) {{
+                return;
+            }}
+            startInput.value = formatInputValue(start);
+            endInput.value = formatInputValue(end);
+            updateChart(start.getTime(), end.getTime());
+        }}
+
+        function bindPlotlyEvents(gd) {{
+            if (gd && typeof gd.on === 'function' && !gd._relayoutBound) {{
+                gd.on('plotly_relayout', relayoutHandler);
+                gd._relayoutBound = true;
+            }}
+        }}
 
         zoomButton.addEventListener('click', () => {{
             const start = new Date(startInput.value);
@@ -170,14 +251,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 alert('Please select a valid date range.');
                 return;
             }}
-            applyRange(start.toISOString(), end.toISOString());
+            updateChart(start.getTime(), end.getTime());
         }});
 
-        resetButton.addEventListener('click', () => {{
-            applyRange(minDate.toISOString(), maxDate.toISOString());
-            startInput.value = formatInputValue(minDate);
-            endInput.value = formatInputValue(maxDate);
-        }});
+        resetButton.addEventListener('click', resetView);
+
+        startInput.value = formatInputValue(minDate);
+        endInput.value = formatInputValue(maxDate);
+        updateChart(minDate.getTime(), maxDate.getTime());
     </script>
 </body>
 </html>
@@ -195,6 +276,18 @@ def parse_total_stands(value):
             raise ValueError(f"Unable to parse total_stands value: {value}")
 
 
+def safe_int(value):
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        try:
+            return int(float(value))
+        except (ValueError, TypeError):
+            return 0
+
+
 def read_csv_file(csv_path):
     rows = []
     with open(csv_path, encoding='utf-8-sig', newline='') as f:
@@ -202,9 +295,16 @@ def read_csv_file(csv_path):
         for row in reader:
             if not row:
                 continue
-            timestamp = (row.get('horodate') or row.get('\ufeffhorodate') or '').strip()
-            if not timestamp:
+            timestamp_raw = (row.get('horodate') or row.get('\ufeffhorodate') or '').strip()
+            if not timestamp_raw:
                 continue
+            try:
+                dt = datetime.fromisoformat(timestamp_raw)
+                timestamp = dt.isoformat()
+                timestamp_ms = int(dt.timestamp() * 1000)
+            except ValueError:
+                timestamp = timestamp_raw
+                timestamp_ms = 0
             station_number = (row.get('number') or '').strip()
             status = (row.get('status') or '').strip().upper()
             total_stands_raw = row.get('total_stands', '')
@@ -212,63 +312,81 @@ def read_csv_file(csv_path):
             avail = parsed.get('availabilities', {}) if isinstance(parsed, dict) else {}
             rows.append({
                 'timestamp': timestamp,
+                'timestamp_ms': timestamp_ms,
                 'station_number': station_number,
                 'status': status,
-                'capacity': parsed.get('capacity', None) if isinstance(parsed, dict) else None,
-                'bikes': avail.get('bikes'),
-                'stands': avail.get('stands'),
-                'electricalBikes': avail.get('electricalBikes'),
-                'mechanicalBikes': avail.get('mechanicalBikes'),
+                'capacity': safe_int(parsed.get('capacity') if isinstance(parsed, dict) else 0),
+                'bikes': safe_int(avail.get('bikes')),
+                'stands': safe_int(avail.get('stands')),
+                'electricalBikes': safe_int(avail.get('electricalBikes')),
+                'mechanicalBikes': safe_int(avail.get('mechanicalBikes')),
+                'status_value': 1 if status == 'OPEN' else 0,
+                'status_label': 'OPEN' if status == 'OPEN' else status or 'UNKNOWN',
+                'status_color': '#2ca02c' if status == 'OPEN' else '#d62728',
             })
     return rows
 
 
-def build_graph_data(rows):
-    timestamps = []
-    capacity = []
-    bikes = []
-    stands = []
-    electrical_bikes = []
-    mechanical_bikes = []
-    status_values = []
-    status_labels = []
-    status_colors = []
-
-    for row in rows:
-        try:
-            dt = datetime.fromisoformat(row['timestamp'])
-            timestamps.append(dt.isoformat())
-        except ValueError:
-            timestamps.append(row['timestamp'])
-        capacity.append(row['capacity'] if row['capacity'] is not None else 0)
-        bikes.append(row['bikes'] if row['bikes'] is not None else 0)
-        stands.append(row['stands'] if row['stands'] is not None else 0)
-        electrical_bikes.append(row['electricalBikes'] if row['electricalBikes'] is not None else 0)
-        mechanical_bikes.append(row['mechanicalBikes'] if row['mechanicalBikes'] is not None else 0)
-        is_open = row['status'] == 'OPEN'
-        status_values.append(1 if is_open else 0)
-        status_labels.append('OPEN' if is_open else row['status'] or 'UNKNOWN')
-        status_colors.append('#2ca02c' if is_open else '#d62728')
-
+def rows_to_level_data(rows):
     return {
-        'timestamps': timestamps,
-        'capacity': capacity,
-        'bikes': bikes,
-        'stands': stands,
-        'electricalBikes': electrical_bikes,
-        'mechanicalBikes': mechanical_bikes,
-        'status_values': status_values,
-        'status_labels': status_labels,
-        'status_colors': status_colors,
+        'timestamps': [row['timestamp'] for row in rows],
+        'timestampsMs': [row['timestamp_ms'] for row in rows],
+        'capacity': [row['capacity'] for row in rows],
+        'bikes': [row['bikes'] for row in rows],
+        'stands': [row['stands'] for row in rows],
+        'electricalBikes': [row['electricalBikes'] for row in rows],
+        'mechanicalBikes': [row['mechanicalBikes'] for row in rows],
+        'status_values': [row['status_value'] for row in rows],
+        'status_labels': [row['status_label'] for row in rows],
+        'status_colors': [row['status_color'] for row in rows],
     }
 
 
+def downsample_rows(rows, max_points):
+    total = len(rows)
+    if total <= max_points:
+        return rows
+    window = math.ceil(total / max_points)
+    aggregated = []
+    for start in range(0, total, window):
+        chunk = rows[start:start + window]
+        if not chunk:
+            continue
+        count = len(chunk)
+        middle = chunk[count // 2]
+        aggregated.append({
+            'timestamp': middle['timestamp'],
+            'timestamp_ms': middle['timestamp_ms'],
+            'capacity': round(sum(row['capacity'] for row in chunk) / count),
+            'bikes': round(sum(row['bikes'] for row in chunk) / count),
+            'stands': round(sum(row['stands'] for row in chunk) / count),
+            'electricalBikes': round(sum(row['electricalBikes'] for row in chunk) / count),
+            'mechanicalBikes': round(sum(row['mechanicalBikes'] for row in chunk) / count),
+            'status_value': chunk[-1]['status_value'],
+            'status_label': chunk[-1]['status_label'],
+            'status_color': chunk[-1]['status_color'],
+        })
+    return aggregated
+
+
+def make_data_levels(rows, max_points=1500, max_levels=5):
+    total = len(rows)
+    levels = []
+    for level in range(max_levels):
+        target = min(total, max_points * (2 ** level))
+        if not levels or target > len(levels[-1]['timestamps']):
+            level_rows = downsample_rows(rows, target)
+            levels.append(rows_to_level_data(level_rows))
+        if target >= total:
+            break
+    return levels
+
+
 def generate_html(station_number, rows, output_path):
-    graph_data = build_graph_data(rows)
+    levels = make_data_levels(rows)
     html_content = HTML_TEMPLATE.format(
         station_number=station_number,
-        data_json=json.dumps(graph_data),
-        status_colors=json.dumps(graph_data['status_colors']),
+        data_json=json.dumps({'levels': levels}, separators=(',', ':')),
     )
     Path(output_path).write_text(html_content, encoding='utf-8')
     print(f"Generated HTML page: {output_path}")
