@@ -56,6 +56,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const resetButton = document.getElementById('resetButton');
         const graphDiv = document.getElementById('graph');
         let ignoreRelayout = false;
+        let currentDragMode = 'zoom';
         const traceVisibility = {{
             capacity: false,
             bikes: true,
@@ -169,6 +170,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         ],
                     }},
                 }},
+                dragmode: currentDragMode,
                 yaxis: {{ title: 'Count' }},
                 yaxis2: {{
                     title: 'Status',
@@ -227,6 +229,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         function updateChart(startMs, endMs) {{
             preserveVisibility();
+            if (graphDiv.layout && graphDiv.layout.dragmode) {{
+                currentDragMode = graphDiv.layout.dragmode;
+            }}
             const rangeSpan = endMs - startMs;
             const levelIndex = chooseLevel(rangeSpan);
             const level = sliceLevel(levels[levelIndex], startMs, endMs);
@@ -248,6 +253,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function relayoutHandler(eventData) {{
             if (ignoreRelayout) {{
                 return;
+            }}
+            if (eventData.dragmode) {{
+                currentDragMode = eventData.dragmode;
             }}
             const x0 = eventData['xaxis.range[0]'] || eventData['xaxis.range'];
             const x1 = eventData['xaxis.range[1]'];
