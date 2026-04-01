@@ -35,6 +35,7 @@ Fetches and collects Vélo'v station data.
 ### Script 2: Data visualization generation
 ```bash
 python generate_station_html.py data/small_sample.csv -o sample_station_report.html
+	Generated HTML page: sample_station_report.html
 ```
 
 Run scripts in sequence:
