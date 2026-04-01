@@ -58,7 +58,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let ignoreRelayout = false;
         let currentDragMode = 'zoom';
         const traceVisibility = {{
-            capacity: false,
+            capacity: true,
             bikes: true,
             stands: false,
             electricalBikes: false,
