@@ -139,7 +139,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         function loadTheme() {{
             const savedTheme = localStorage.getItem('velovstat-theme');
-            const theme = savedTheme === 'dark' ? 'dark' : 'light';
+            const theme = savedTheme === 'light' ? 'light' : 'dark';
             applyTheme(theme);
         }}
 
@@ -435,6 +435,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         function aggregateTypicalPattern(level, startMs, endMs, periodKeyFn) {{
             const groups = {{}};
+            const isTimeOfDayOnly = periodKeyFn === getTimeOfDayKey;
             for (let index = 0; index < level.timestampsMs.length; index++) {{
                 const timestampMs = level.timestampsMs[index];
                 if (timestampMs < startMs || timestampMs > endMs) {{
@@ -445,7 +446,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (!groups[key]) {{
                     groups[key] = {{
                         key,
-                        dayIndex: (date.getDay() + 6) % 7,
+                        dayIndex: isTimeOfDayOnly ? 0 : (date.getDay() + 6) % 7,
                         timeIndex: date.getHours() * 100 + date.getMinutes(),
                         bikes: [],
                         electricalBikes: [],
